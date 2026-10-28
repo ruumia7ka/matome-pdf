@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5f5b">
+<title>まとめPDF</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #f5f2ec;
+    --surface: #ffffff;
+    --ink: #22262a;
+    --muted: #6b7076;
+    --line: #e2ddd3;
+    --accent: #1f5f5b;
+    --accent-ink: #ffffff;
+    --accent-soft: #dcebe8;
+    --danger: #b3412e;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16191b;
+      --surface: #212629;
+      --ink: #eceae6;
+      --muted: #9aa0a5;
+      --line: #343a3e;
+      --accent: #5fb3aa;
+      --accent-ink: #0f1a19;
+      --accent-soft: #263c3a;
+      --danger: #e2826f;
+      --shadow: 0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Noto Sans JP", "Hiragino Sans", sans-serif;
+    min-height: 100dvh;
+    overscroll-behavior-y: contain;
+  }
+  button { font: inherit; color: inherit; }
+
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: calc(env(safe-area-inset-top) + 14px) 16px 10px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid transparent;
+  }
+  header.scrolled { border-bottom-color: var(--line); }
+  header h1 { font-size: 19px; margin: 0; font-weight: 700; letter-spacing: .02em; flex: 1; }
+  header .count { color: var(--muted); font-size: 14px; }
+
+  .ghost-btn {
+    border: 1px solid var(--line); background: var(--surface);
+    border-radius: 999px; padding: 7px 14px; font-size: 14px;
+  }
+  .ghost-btn:active { transform: scale(.97); }
+
+  /* empty state */
+  #empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 40px 24px; min-height: 70dvh; gap: 18px;
+  }
+  #empty svg { width: 96px; height: 96px; color: var(--accent); opacity: .9; }
+  #empty p { margin: 0; color: var(--muted); line-height: 1.7; }
+  .primary-btn {
+    background: var(--accent); color: var(--accent-ink); border: 0;
+    border-radius: 14px; padding: 15px 28px; font-size: 17px; font-weight: 700;
+    box-shadow: var(--shadow);
+  }
+  .primary-btn:active { transform: scale(.98); }
+  .primary-btn:disabled { opacity: .5; }
+
+  /* list */
+  #list { list-style: none; margin: 0; padding: 8px 12px 140px; }
+  .item {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border-radius: 14px; padding: 8px;
+    margin-bottom: 10px; box-shadow: var(--shadow);
+    position: relative; user-select: none; -webkit-user-select: none;
+  }
+  .item.dragging { z-index: 10; box-shadow: 0 10px 30px rgba(0,0,0,.25); outline: 2px solid var(--accent); }
+  .item.flash { animation: flash .5s ease; }
+  @keyframes flash { from { background: var(--accent-soft); } to { background: var(--surface); } }
+
+  .handle {
+    touch-action: none; width: 34px; align-self: stretch;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); border: 0; background: none; padding: 0; cursor: grab;
+  }
+  .handle svg { width: 22px; height: 22px; }
+  .num {
+    position: absolute; left: 50px; top: 12px; z-index: 1;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 12px; font-weight: 700; border-radius: 999px; min-width: 24px; height: 24px;
+    padding: 0 7px; display: flex; align-items: center; justify-content: center;
+  }
+  .thumb {
+    width: 104px; height: 104px; flex: none; border-radius: 10px;
+    background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; transition: transform .2s ease; }
+  .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .meta .name { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tools { display: grid; grid-template-columns: repeat(3, 40px); gap: 6px; }
+  .tool {
+    width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .tool svg { width: 20px; height: 20px; }
+  .tool:active { background: var(--accent-soft); }
+  .tool:disabled { opacity: .3; }
+  .tool.del { color: var(--danger); }
+
+  /* bottom bar */
+  #bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    padding: 12px 16px calc(env(safe-area-inset-bottom) + 14px);
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
+    display: flex; gap: 10px;
+  }
+  #bar .primary-btn { flex: 1; }
+  #addBtn { flex: none; padding: 15px 18px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+
+  /* dialog */
+  dialog {
+    border: 0; border-radius: 18px; padding: 22px 20px 18px; width: min(92vw, 420px);
+    background: var(--surface); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { margin: 0 0 6px; font-size: 18px; }
+  dialog p { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 18px; }
+  .name-row input {
+    flex: 1; min-width: 0; font-size: 17px; padding: 12px; border-radius: 10px;
+    border: 1.5px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  .name-row input:focus { outline: none; border-color: var(--accent); }
+  .name-row span { color: var(--muted); }
+  .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .dialog-actions button { padding: 12px 18px; border-radius: 12px; font-size: 15px; }
+  .cancel { border: 1px solid var(--line); background: none; }
+
+  /* progress */
+  #progress {
+    position: fixed; inset: 0; z-index: 20; display: none;
+    background: rgba(0,0,0,.5); align-items: center; justify-content: center;
+  }
+  #progress.show { display: flex; }
+  #progress .box { background: var(--surface); border-radius: 16px; padding: 22px; width: min(80vw, 300px); text-align: center; }
+  #progress .track { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; margin-top: 14px; }
+  #progress .fill { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 96px); z-index: 30;
+    transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
+    background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 12px;
+    font-size: 14px; transition: all .25s ease; max-width: 90vw; text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <header id="header">
+    <h1>まとめPDF</h1>
+    <span class="count" id="count"></span>
+    <button class="ghost-btn hidden" id="clearBtn">全部消す</button>
+  </header>
+
+  <section id="empty">
+    <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round">
+      <rect x="22" y="14" width="44" height="58" rx="6" opacity=".35"/>
+      <rect x="30" y="22" width="44" height="58" rx="6" fill="var(--surface)"/>
+      <path d="M38 64l9-11 7 8 5-6 9 9" stroke-linecap="round"/>
+      <circle cx="44" cy="40" r="4"/>
+    </svg>
+    <p>画像をえらんで、並べかえて、<br>1つのPDFにまとめます。<br>オフラインでも使えます。</p>
+    <button class="primary-btn" id="pickBtn">画像をえらぶ</button>
+  </section>
+
+  <ol id="list"></ol>
+
+  <div id="bar" class="hidden">
+    <button class="primary-btn" id="addBtn" aria-label="画像を追加">＋ 追加</button>
+    <button class="primary-btn" id="nextBtn">PDFにする</button>
+  </div>
+
+  <input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+  <dialog id="nameDialog">
+    <form method="dialog" id="nameForm">
+      <h2>ファイル名</h2>
+      <p id="dialogInfo"></p>
+      <div class="name-row">
+        <input id="nameInput" type="text" autocomplete="off" enterkeyhint="done">
+        <span>.pdf</span>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="cancel" id="cancelBtn">もどる</button>
+        <button type="submit" class="primary-btn" id="saveBtn">PDF化して保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="progress"><div class="box"><div id="progressText">PDFを作っています…</div><div class="track"><div class="fill" id="progressFill"></div></div></div></div>
+  <div id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
